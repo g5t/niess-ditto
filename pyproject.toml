@@ -25,7 +25,7 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
-  "nicos",
+  "nicos_ess",
   "mccode-antlr",
   "mccode-plumber",
   "confluent-kafka",
@@ -65,3 +65,11 @@ exclude_lines = [
   "if __name__ == .__main__.:",
   "if TYPE_CHECKING:",
 ]
+
+[tool.uv.sources]
+nicos_ess = { index = "ecdc-pypi" }
+
+[[tool.uv.index]]
+name = "ecdc-pypi"
+url = "https://artifactory.esss.lu.se/artifactory/api/pypi/ecdc-pypi/simple"
+cache-control = { api = "max-age=600", files = "max-age=365000000, immutable" }
