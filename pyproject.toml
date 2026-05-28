@@ -24,7 +24,13 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
-dependencies = []
+dependencies = [
+  "nicos",
+  "mccode-antlr",
+  "mccode-plumber",
+  "confluent-kafka",
+  "colorama",
+]
 
 [project.urls]
 Documentation = "https://github.com/Gregory Tucker/niess-ditto#readme"
