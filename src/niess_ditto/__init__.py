@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 from .__about__ import __version__
+from .config import SimInstrumentConfig
 from .detector import SimDetector
 from .motor import SimMotor
 from .service_manager import SimServiceManager
@@ -13,6 +14,7 @@ __all__ = [
     "__version__",
     "SimState",
     "SimMotor",
+    "SimInstrumentConfig",
     "SimServiceManager",
     "SimDetector",
     "make_ditto_setup",

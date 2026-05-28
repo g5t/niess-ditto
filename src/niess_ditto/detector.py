@@ -9,6 +9,10 @@ class SimDetector(McStasSimulation):
 
     attached_devices = {
         "state": Attach("Shared simulation state", SimState),
+        "config": Attach(
+            "Instrument configuration (string parameters)",
+            required=False,
+        ),
     }
 
     parameters = {
@@ -27,7 +31,17 @@ class SimDetector(McStasSimulation):
     }
 
     def _prepare_params(self):
-        return [f"{k}={v}" for k, v in self._attached_state.positions.items()]
+        params = [f"{k}={v}" for k, v in self._attached_state.positions.items()]
+        
+        # Add string parameters from config if present
+        if self._attached_config:
+            for key in self._attached_config.__dict__:
+                if not key.startswith("_"):
+                    value = getattr(self._attached_config, key, None)
+                    if value is not None and value != "":
+                        params.append(f"{key}={value}")
+        
+        return params
 
     def _getNeutronsToSimulate(self):
         return int(round(self.preselection * self.rays_per_charge))
