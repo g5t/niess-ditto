@@ -48,8 +48,13 @@ class SimDetector(McStasSimulation):
                                  type=floatrange(1e-10), settable=True, default=1.0),
         "minimum_particles": Param("restage's minimum primary MCPL particle count (0: none)",
                                    type=intrange(0, 2**53), settable=True, default=0),
-        "maximum_particles": Param("restage's maximum primary MCPL particle count (0: none)",
-                                   type=intrange(0, 2**53), settable=True, default=0),
+        # restage repeats the primary until the split has as many rays as the count asks
+        # for, each pass at most this many. At its own default, the count itself, a ~1e-3
+        # transmission makes that ~1000 short passes: ~5 min at charge=1e5 for what two
+        # passes do in ~40 s.
+        "maximum_particles": Param("Most rays one pass of the primary simulates "
+                                   "(0: restage's default, the count)",
+                                   type=intrange(0, 2**53), settable=True, default=10**9),
         "mcpl_input_component": Param("The MCPL input the secondary reads",
                                       type=str, default="MCPL_input_once"),
         "mcpl_output_parameters": Param("Parameters for the primary's MCPL output",
