@@ -2,6 +2,8 @@ from pathlib import Path
 
 from nicos.core import Device, MASTER, Param, listof, nonemptystring, usermethod
 
+from .template import make_template
+
 
 class SimServiceManager(Device):
     """Runs the data-collection services for the whole time the setup is loaded.
@@ -51,7 +53,7 @@ class SimServiceManager(Device):
             writer_working_dir=self.writer_work_dir or None,
         )
         if self.writer_work_dir:
-            _ensure_template(Path(self.writer_work_dir), kwargs["instr_name"])
+            make_template(self.structure, self.writer_work_dir, kwargs["instr_name"])
         seen = _status_count(self.broker, TOPICS["status"])
         self._services = start_services(**kwargs)
         wait_for_services(self._services)
@@ -85,23 +87,6 @@ class SimServiceManager(Device):
             except Exception as error:  # noqa: BLE001
                 self.log.warning("stopping %s: %s", service.name, error)
         self._services = ()
-
-
-def _ensure_template(work: Path, instrument: str) -> None:
-    """An empty file for kafka-to-nexus to start NICOS' jobs from.
-
-    A start message that names its instrument, as NICOS' does, makes the writer copy
-    ``<template prefix>/<instrument>/<instrument>.hdf`` and write into the copy; at ESS
-    those templates are provided with the writer. Nothing needs to be in it here. It
-    must be in HDF5's latest format, which the writer opens for SWMR writing.
-    """
-    import h5py
-
-    template = work / instrument / f"{instrument}.hdf"
-    if not template.exists():
-        template.parent.mkdir(parents=True, exist_ok=True)
-        with h5py.File(template, "w", libver="latest"):
-            pass
 
 
 def _status_count(broker, topic):

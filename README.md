@@ -66,8 +66,13 @@ stop_filewriting()
 ```
 
 The live build and structure come from `bifrost_phonon.py --live` (bifrost-workflow-2609).
-Needs a Kafka broker, and the stacktainer splitrun image's EFU, forwarder and
-kafka-to-nexus.
+Needs a Kafka broker, and the stacktainer splitrun image's EFU, forwarder,
+kafka-to-nexus and template-maker.
+
+As at ESS, the file-writer starts each file from a template: `sim_services` makes it
+from the structure's datasets with kafka-to-nexus' `template-maker` (again only when the
+structure changes), and NICOS' start message carries the streams and links only, 176 kB
+instead of 1.5 MB for BIFROST.
 
 ## Known limits
 
@@ -76,8 +81,10 @@ kafka-to-nexus.
 - The simulation runs in NICOS' working directory, so data files the sample reads by
   relative name (BIFROST's `.lau` reflection list) must be there.
 - mccode-plumber must pass `--hdf-template-prefix` to kafka-to-nexus (branch
-  `writer-template-prefix`): NICOS' start messages name the instrument, which makes the
-  writer start from a template file.
+  `writer-template-prefix`), so that the writer finds the template in its working
+  directory.
+- A dataset in the template cannot be changed by a start message, so nothing NICOS sets
+  per run (title, users, sample) may be in the structure.
 - `rays_per_charge` is a plain conversion factor; the charge preset is not yet tied to
   the source's real proton charge.
 
