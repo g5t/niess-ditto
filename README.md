@@ -10,6 +10,7 @@
 - [Installation](#installation)
 - [What it provides](#what-it-provides)
 - [Usage in a NICOS setup](#usage-in-a-nicos-setup)
+- [Known limits](#known-limits)
 - [License](#license)
 
 ## Installation
@@ -20,40 +21,65 @@ pip install niess-ditto
 
 ## What it provides
 
-`niess-ditto` provides NICOS device classes and setup helpers for a DITTO digital
-instrument model:
+NICOS devices for a DITTO digital model of BIFROST: the instrument is driven through
+NICOS as the real one is, each count simulates it with McStas, and its events, logs and
+file go through the real ESS data-collection services.
 
-- `niess_ditto.state.SimState`: shared in-memory motor-position state
-- `niess_ditto.motor.SimMotor`: driveable motor storing targets in `SimState`
-- `niess_ditto.detector.SimDetector`: `McStasSimulation` subclass that runs the
-  simulation binary
-- `niess_ditto.service_manager.SimServiceManager`: manages EFU, EPICS mailbox,
-  EPICS forwarder and Kafka-to-Nexus worker processes
-- `niess_ditto.setup_generator.make_ditto_setup(...)`: generates a NICOS
-  `devices` dict from a mccode-antlr JSON instrument definition
+- `niess_ditto.setup_generator.make_ditto_setup(...)` builds a setup's `devices` from
+  the live BIFROST instrument (mccode-antlr JSON), its NeXus structure, and the real
+  instrument's NICOS setups.
+- `niess_ditto.translator` matches the real NICOS devices to McStas parameters by the
+  EPICS PV both name, so nothing is hard-coded: `sample_stack_rotation` sets
+  `sample_rotation` because both are about `BIFRO-SpRot:MC-RotZ-01:Mtr`. `names=` renames
+  any device.
+- `SimMotor` (one per parameter), `SimChopperSpeed` (the real controller's speeds only)
+  and `SimChopperController` (`start`/`stop`/`park`) stand in for the real devices.
+- `IncidentBand` sets all six discs from one lowest incident energy, or a longest
+  wavelength, with `chopcal.nicos.bifrost`; it refuses while any disc is stopped.
+- `SimDetector` runs each count as one `restage` point, so primary spectrometer
+  simulations are reused from restage's cache, and chooses the split once per scan from
+  all of its planned points. mccode-plumber's publisher puts every value on the PVs the
+  NeXus file records before each point. `ChargeChannel` makes the preset
+  `count(charge=...)`.
+- `SimServiceManager` starts mccode-plumber's services (EFU, forwarder, EPICS mailbox,
+  top-dead-centre publisher, kafka-to-nexus) and configures the forwarder.
+- `LocalFileWriterControlSink` and `NexusStructureFile` adapt ESS' file-writer devices
+  to a kafka-to-nexus DITTO runs itself.
 
 ## Usage in a NICOS setup
 
+See `nicos/ditto/setups/bifrost.py`:
+
 ```python
-# nicos_ess/<instrument>/setups/digital_model.py
-description = "Digital model"
-
-from niess_ditto.setup_generator import make_ditto_setup
-
 devices = make_ditto_setup(
-    instrument_json="/opt/ditto/tsorfib.json",
-    broker="localhost:9092",
-    rays_per_charge=1.0,
+    instrument_json="/opt/ditto/bifrost_live.instr.json",
+    structure_json="/opt/ditto/bifrost_live.json",
+    nicos_setups=[Path(nicos_ess.__file__).parent / "bifrost" / "setups"],
 )
 ```
 
-The generated setup includes:
+```python
+start_filewriting("a3 scan")
+maw(incident_band, 4.5)            # meV; or incident_band.set_wavelength_max(3.0)
+scan(sample_stack_rotation, 0, 1, 3, charge=100000)
+stop_filewriting()
+```
 
-- a shared state device
-- one `SimMotor` per numeric instrument parameter
-- one `SimServiceManager` device to start/stop background services
-- one `SimDetector` device that converts charge preset to neutron-ray count via
-  `rays_per_charge`
+The live build and structure come from `bifrost_phonon.py --live` (bifrost-workflow-2609).
+Needs a Kafka broker, and the stacktainer splitrun image's EFU, forwarder and
+kafka-to-nexus.
+
+## Known limits
+
+- The services start in NICOS' master process. A session that only becomes master
+  after loading the setup (`nicos-script -M`) calls `sim_services.start()` itself.
+- The simulation runs in NICOS' working directory, so data files the sample reads by
+  relative name (BIFROST's `.lau` reflection list) must be there.
+- mccode-plumber must pass `--hdf-template-prefix` to kafka-to-nexus (branch
+  `writer-template-prefix`): NICOS' start messages name the instrument, which makes the
+  writer start from a template file.
+- `rays_per_charge` is a plain conversion factor; the charge preset is not yet tied to
+  the source's real proton charge.
 
 ## License
 
