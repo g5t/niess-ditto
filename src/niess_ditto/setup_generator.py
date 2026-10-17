@@ -70,11 +70,14 @@ def make_ditto_setup(
     workdir="/tmp/ditto",
     rays_per_charge=1.0,
     efu=(),
+    sample_builder=None,
 ):
     """Return the ``devices`` dict of a DITTO setup.
 
     ``nicos_setups`` are the real instrument's NICOS setup directories, read to name the
     devices. ``names`` renames any of them: ``{"sample_stack_rotation": "a3"}``.
+    ``sample_builder`` (``"file.py:function"``) builds the instrument around a niess
+    sample; with it, ``sim_sample.load_sample(script)`` changes the sample.
     """
     from mccode_antlr.common.expression import DataType
     from mccode_plumber.manage.orchestrate import get_instr_name_and_parameters, load_file_json
@@ -146,12 +149,21 @@ def make_ditto_setup(
         instrument=instrument_json, structure=structure_json, broker=broker,
         efu=list(efu), writer_work_dir=f"{workdir}/writer",
     )
+    sample = {}
+    if sample_builder:
+        devices["sim_sample"] = _device(
+            "niess_ditto.sample.SimSample",
+            description=f"{instr_name} simulated sample",
+            builder=sample_builder, base_instrument=instrument_json,
+            workdir=f"{workdir}/samples",
+        )
+        sample = {"sample": "sim_sample"}
     devices["sim_det"] = _device(
         "niess_ditto.detector.SimDetector",
         description=f"{instr_name} digital model",
         instrument=instrument_json, structure=structure_json, broker=broker,
         state="sim_state", rays_per_charge=float(rays_per_charge),
-        workdir=f"{workdir}/counts", fixed=fixed,
+        workdir=f"{workdir}/counts", fixed=fixed, **sample,
     )
     devices["charge"] = _device(
         "niess_ditto.detector.ChargeChannel",
@@ -172,7 +184,7 @@ def make_ditto_setup(
         nexus_config_path=nexus_template(instrument_json, structure_json,
                                          f"{workdir}/{instr_name}_nexus_structure.json"),
         instrument_name=instr_name,
-        visibility=(),
+        visibility=(), **sample,
     )
     devices["NexusStructure"] = _device(
         "nicos.devices.generic.DeviceAlias",

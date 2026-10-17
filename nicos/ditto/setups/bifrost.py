@@ -1,7 +1,8 @@
 description = "BIFROST digital model"
 
 # The live build of BIFROST (bifrost_phonon.py --live in bifrost-workflow-2609) and its
-# NeXus structure; DITTO_INSTRUMENT and DITTO_STRUCTURE point elsewhere.
+# NeXus structure; DITTO_INSTRUMENT and DITTO_STRUCTURE point elsewhere. That script's
+# ditto_instrument rebuilds it around another sample, for load_sample (DITTO_BUILDER).
 import os
 from pathlib import Path
 
@@ -15,6 +16,7 @@ devices = make_ditto_setup(
     nicos_setups=[Path(nicos_ess.__file__).parent / "bifrost" / "setups"],
     broker="localhost:9092",
     workdir=os.environ.get("DITTO_WORKDIR", "/tmp/ditto"),
+    sample_builder=os.environ.get("DITTO_BUILDER", "/opt/ditto/bifrost_phonon.py:ditto_instrument"),
 )
 
 startupcode = """

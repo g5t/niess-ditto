@@ -1,21 +1,41 @@
 """ESS' file-writing devices, adjusted for a file-writer that DITTO runs itself."""
 from pathlib import Path
 
-from nicos.core import Override, Param, nonemptystring
+from copy import deepcopy
+
+from nicos.core import Attach, Override, Param, nonemptystring
 from nicos_ess.devices.datasinks.file_writer import FileWriterControlSink
 from nicos_ess.devices.datasinks.nexus_structure import NexusStructureJsonFile
+
+from .sample import SimSample
 
 
 class NexusStructureFile(NexusStructureJsonFile):
     """ESS' structure provider, reading a structure from anywhere.
 
     The ESS device only takes paths inside NICOS' working directory; DITTO's structure
-    is written next to the simulation's other files.
+    is written next to the simulation's other files. A loaded sample script's NXsample
+    group goes in as ``/entry/sample``, before NICOS adds its own sample information.
     """
+
+    attached_devices = {
+        "sample": Attach("The sample, when it can be changed", SimSample, optional=True),
+    }
 
     parameter_overrides = {
         "nexus_config_path": Override(type=str),
     }
+
+    def _load_structure(self):
+        structure = NexusStructureJsonFile._load_structure(self)
+        sample = self._attached_sample
+        if sample is not None and sample.nexus:
+            group = deepcopy(sample.nexus)
+            entry = self._get_node(structure, "/entry")
+            entry["children"] = [c for c in entry["children"]
+                                 if c.get("name") != group["name"]] + [group]
+            self._refresh_map(structure)
+        return structure
 
 
 class LocalFileWriterControlSink(FileWriterControlSink):
