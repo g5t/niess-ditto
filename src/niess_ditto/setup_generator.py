@@ -25,8 +25,8 @@ def _unit(parameter):
 
 
 def nexus_template(instrument_json, structure_json, path):
-    """Write the structure the file-writer fills, with the parameters plumber adds.
-
+    """Write the start message's structure: the streams and links the run writes,
+    with the parameters plumber adds. Its datasets are in the writer's template.
     """
     from mccode_plumber.manage.orchestrate import (
         PREFIX, TOPICS, get_instr_name_and_parameters, load_file_json,
@@ -34,9 +34,10 @@ def nexus_template(instrument_json, structure_json, path):
     from mccode_plumber.writer import (
         add_pvs_to_nexus_structure, construct_writer_pv_dicts_from_parameters,
     )
+    from .template import without_datasets
     _, parameters = get_instr_name_and_parameters(instrument_json)
     pvs = construct_writer_pv_dicts_from_parameters(parameters, PREFIX, TOPICS["parameter"])
-    structure = add_pvs_to_nexus_structure(load_file_json(structure_json), pvs)
+    structure = add_pvs_to_nexus_structure(without_datasets(load_file_json(structure_json)), pvs)
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(structure))
