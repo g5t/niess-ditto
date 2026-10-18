@@ -40,6 +40,34 @@ def nxsample(values: dict) -> dict:
     return generate_group_json("sample", "NXsample", children)
 
 
+def _name(node):
+    return node.get("name") or node.get("config", {}).get("name") if isinstance(node, dict) else None
+
+
+def _child(group, name):
+    return next((c for c in group.get("children", []) if _name(c) == name), None)
+
+
+def put_sample(entry: dict, group: dict | None, frame: str | None) -> dict:
+    """Put an NXsample group in ``entry``: ``group``, replacing any of its name, or else
+    the structure's own ``sample`` or an empty one. Unless it says otherwise, its
+    depends_on links to that of ``frame``, the instrument's group at the sample: that
+    chain holds the sample's orientation, which reductions (SQW's psi) read. A link,
+    because the dataset itself is in the file-writer's template, not the structure."""
+    children = entry.setdefault("children", [])
+    if group is not None:
+        children[:] = [c for c in children if _name(c) != group["name"]] + [group]
+    else:
+        group = _child(entry, "sample")
+        if group is None:
+            group = nxsample({})
+            children.append(group)
+    if frame and not _child(group, "depends_on"):
+        group.setdefault("children", []).append(
+            {"module": "link", "config": {"name": "depends_on", "source": f"{frame}/depends_on"}})
+    return group
+
+
 def builder_function(spec: str):
     """``"path/to/file.py:function"`` or ``"module:function"``."""
     where, _, name = spec.rpartition(":")
