@@ -102,8 +102,14 @@ needs a parameter no device sets is refused.
   directory.
 - A dataset in the template cannot be changed by a start message, so nothing NICOS sets
   per run (title, users, sample) may be in the structure.
-- Each new sample simulates the primary spectrometer again once: the split keeps the
-  sample's particle variables (USERVARS) in the primary half, so its cache key changes.
+- A sample shares its primary with the others only with mccode-antlr's
+  `split-drops-unused-uservars` change and restage's `compile-a-copy`; without the first,
+  the split keeps a sample's particle variables in the primary and each new sample
+  simulates it again; without the second, every count after a compile does.
+- The setup's instrument (`DITTO_INSTRUMENT`) must be built by the same builder, with
+  the same niess and mccode-antlr, as `load_sample`'s: one built by other versions
+  differs in its primary too (component metadata, number formatting), so it shares no
+  primary with the samples.
 - `rays_per_charge` is a plain conversion factor; the charge preset is not yet tied to
   the source's real proton charge.
 
