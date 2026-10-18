@@ -87,8 +87,10 @@ sim_sample.clear_sample()                        # back to the setup's own sampl
 
 The setup's `DITTO_BUILDER` (`bifrost_phonon.py:ditto_instrument` in
 bifrost-workflow-2609) builds the instrument around it. Files started afterwards have
-`nexus` as `/entry/sample`, where NICOS adds the Sample device's information too. A
-sample may use fewer of the instrument's parameters, or new ones with defaults; one that
+`nexus` as `/entry/sample`, where NICOS adds the Sample device's information too. Its
+`depends_on` links to that of `/entry/instrument/sample`, so the sample's orientation
+(the logged `sample_rotation`, SQW's psi) can be read from the file; without a loaded
+script the group holds only that link. A sample may use fewer of the instrument's parameters, or new ones with defaults; one that
 needs a parameter no device sets is refused.
 
 ## Known limits
