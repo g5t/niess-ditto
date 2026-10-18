@@ -2,13 +2,18 @@ from nicos.core import Device, Param, anytype, dictof
 
 
 class SimState(Device):
-    """Shared in-process state store for a DITTO simulation."""
+    """The McStas parameter values the next count simulates, keyed by parameter name.
+
+    Devices write here under the *parameter's* name, not their own, so a device can be
+    called whatever the instrument calls it while the simulation still gets the name it
+    declares.
+    """
 
     hardware_access = False
 
     parameters = {
         "positions": Param(
-            "Current motor positions keyed by device name",
+            "Current McStas parameter values keyed by parameter name",
             type=dictof(str, anytype),
             settable=True,
             default={},

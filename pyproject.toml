@@ -27,9 +27,11 @@ classifiers = [
 dependencies = [
   "nicos_ess",
   "mccode-antlr",
-  "mccode-plumber",
+  "mccode-plumber>=0.26.0",
+  "restage>=0.18.0",
+  "chopcal>=0.8.0",
   "confluent-kafka",
-  "colorama",
+  "h5py",
 ]
 
 [project.urls]

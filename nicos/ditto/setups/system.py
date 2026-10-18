@@ -5,7 +5,7 @@ group = "lowlevel"
 
 sysconfig = dict(
     cache="localhost",
-    instrument="DITTO",
+    instrument="BIFROST",
     experiment="Exp",
     datasinks=["conssink", "daemonsink", "liveview"],
 )
@@ -18,7 +18,7 @@ devices = dict(
         description="instrument model object",
         facility="European Spallation Source (ERIC)",
         instrument="DITTO",
-        responsible="You",
+        responsible="gregory.tucker@ess.eu",
         website="https://github.com/g5t/niess-ditto.git",
     ),
     Sample=device(
@@ -28,9 +28,9 @@ devices = dict(
     Exp=device(
         "nicos_ess.devices.experiment.EssExperiment",
         description="experiment object",
-        dataroot="/opt/nicos-data",
+        dataroot="/tmp/nicos-data",
         sample="Sample",
-        cache_filepath="/opt/nicos-data/cached_proposals.json",
+        cache_filepath="/tmp/nicos-data/cached_proposals.json",
     ),
     pnp_listener=device(
         "nicos_ess.devices.pnp_listener.UDPHeartbeatsManager",
@@ -40,44 +40,4 @@ devices = dict(
     conssink=device("nicos_ess.devices.datasinks.console_scan_sink.ConsoleScanSink"),
     daemonsink=device("nicos.devices.datasinks.DaemonSink"),
     liveview=device("nicos.devices.datasinks.LiveViewSink"),
-    KafkaForwarder=device(
-        "nicos_ess.devices.forwarder.EpicsKafkaForwarder",
-        description="Monitors the status of the Forwarder",
-        statustopic=["ditto_forwarder_dynamic_status"],
-        config_topic="ditto_forwarder_dynamic_config",
-        brokers=configdata("config.KAFKA_BROKERS"),
-    ),
-    NexusStructure_Basic=device(
-        "nicos_ess.devices.datasinks.nexus_structure.NexusStructureJsonFile",
-        description="Provides the NeXus structure",
-        nexus_config_path="nexus-json-templates/ditto/ditto-dynamic.json",
-        instrument_name="ditto",
-        visibility=(),
-    ),
-    NexusStructure=device(
-        "nicos.devices.generic.DeviceAlias",
-        alias="NexusStructure_Basic",
-        devclass="nicos_ess.devices.datasinks.nexus_structure.NexusStructureJsonFile",
-    ),
-    FileWriterStatus=device(
-        "nicos_ess.devices.datasinks.file_writer.FileWriterStatus",
-        description="Status of the file-writer",
-        brokers=configdata("config.KAFKA_BROKERS"),
-        statustopic=["ditto_filewriter",],
-        unit="",
-    ),
-    FileWriterControl=device(
-        "nicos_ess.devices.datasinks.file_writer.FileWriterControlSink",
-        description="Control for the file-writer",
-        brokers=configdata("config.KAFKA_BROKERS"),
-        pool_topic="ditto_filewriter_pool",
-        instrument_topic="ditto_filewriter",
-        status="FileWriterStatus",
-        nexus="NexusStructure",
-    ),
-    SciChat=device(
-        "nicos_ess.devices.scichat.ScichatBot",
-        description="Sends messages to SciChat",
-        brokers=configdata("config.KAFKA_BROKERS"),
-    ),
 )

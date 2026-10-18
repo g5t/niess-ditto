@@ -4,7 +4,12 @@ from .state import SimState
 
 
 class SimMotor(HasLimits, Moveable):
-    """Instantaneous moveable backed by SimState and an EPICS mailbox PV."""
+    """An instantaneous moveable that sets one McStas parameter.
+
+    Nothing is written to EPICS here: before each simulated point `SimDetector` puts
+    every parameter onto the PVs the NeXus file records, using mccode-plumber's own
+    publisher, so the file holds what was simulated.
+    """
 
     hardware_access = False
 
@@ -13,10 +18,10 @@ class SimMotor(HasLimits, Moveable):
     }
 
     parameters = {
-        "pv_prefix": Param(
-            "EPICS PV prefix used by the mailbox",
+        "parameter": Param(
+            "The McStas parameter this device sets",
             type=str,
-            default="mcstas:",
+            mandatory=True,
         ),
     }
 
@@ -25,23 +30,14 @@ class SimMotor(HasLimits, Moveable):
     }
 
     def doStart(self, target):
-        self._attached_state.set_motor(self.name, target)
-        self._put_epics(target)
+        self._attached_state.set_motor(self.parameter, target)
 
     def doRead(self, maxage=0):
-        return self._attached_state.get_motor(self.name)
+        return self._attached_state.get_motor(self.parameter, self.target or 0)
 
     def doStatus(self, maxage=0):
         return status.OK, "idle"
 
-    def _put_epics(self, value):
-        try:
-            from p4p.client.thread import Context
-
-            ctx = Context("pva")
-            try:
-                ctx.put(f"{self.pv_prefix}{self.name}", value)
-            finally:
-                ctx.disconnect()
-        except (ImportError, OSError, RuntimeError, ValueError) as err:
-            self.log.warning("EPICS put failed for %s: %s", self.name, err)
+    def simulation_parameters(self, target):
+        """The parameter values moving to ``target`` would simulate."""
+        return {self.parameter: target}
