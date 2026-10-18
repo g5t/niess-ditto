@@ -24,6 +24,7 @@ from nicos.core import (
 from nicos.devices.generic.detector import ActiveChannel
 from nicos.devices.mcstas import McStasSimulation
 
+from .sample import SimSample
 from .state import SimState
 
 
@@ -32,6 +33,7 @@ class SimDetector(McStasSimulation):
 
     attached_devices = {
         "state": Attach("Shared simulation state", SimState),
+        "sample": Attach("The sample, when it can be changed", SimSample, optional=True),
     }
 
     parameters = {
@@ -70,15 +72,21 @@ class SimDetector(McStasSimulation):
 
     _plan = None  # (scan, split) for the scan being counted in
     _instr = None
+    _instr_path = None
 
     def doInit(self, mode):
         McStasSimulation.doInit(self, mode)
         self._runs = counter()
 
+    def _instrument(self):
+        sample = self._attached_sample
+        return (sample.instrument if sample is not None else "") or self.instrument
+
     def _load(self):
-        """Read the instrument and structure, on the first count: only the process
-        that counts needs them."""
-        if self._instr is not None:
+        """Read the instrument and structure, on the first count and after the sample
+        changes: only the process that counts needs them."""
+        path = self._instrument()
+        if path == self._instr_path:
             return
         from mccode_plumber.manage.orchestrate import (
             RUN_PV, PREFIX, get_chopper_specs, get_simulated_logs, load_file_json,
@@ -88,7 +96,9 @@ class SimDetector(McStasSimulation):
         from mccode_plumber.splitrun import (
             monitors_to_kafka_callback_for_topics, parameter_pvs_callback_with_arguments,
         )
-        self._instr = get_mcstas_instr(self.instrument)
+        self._instr = get_mcstas_instr(path)
+        self._instr_path = path
+        self._plan = None
         structure = load_file_json(self.structure)
         choppers = [c for c, _ in get_chopper_specs(structure)]
         logs = get_simulated_logs(structure, choppers)
@@ -100,7 +110,11 @@ class SimDetector(McStasSimulation):
     # -- what to simulate ---------------------------------------------------------------
 
     def _values(self):
-        return {**self.fixed, **self._attached_state.positions}
+        """The values of the instrument's parameters: a sample may not use them all."""
+        self._load()
+        names = {p.name for p in self._instr.parameters}
+        values = {**self.fixed, **self._attached_state.positions}
+        return {k: v for k, v in values.items() if k in names}
 
     def _planned_points(self, values):
         """Every point of the running scan, as parameter values, or None outside one.

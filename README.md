@@ -74,6 +74,23 @@ from the structure's datasets with kafka-to-nexus' `template-maker` (again only 
 structure changes), and NICOS' start message carries the streams and links only, 176 kB
 instead of 1.5 MB for BIFROST.
 
+## Changing the sample
+
+A sample script defines a niess section, `sample`, and the file's NXsample group,
+`nexus` (see `examples/vanadium.py`):
+
+```python
+sim_sample.load_sample("examples/vanadium.py")   # ~7 s: the instrument is rebuilt
+scan(sample_stack_rotation, 0, 1, 10, charge=100000)
+sim_sample.clear_sample()                        # back to the setup's own sample
+```
+
+The setup's `DITTO_BUILDER` (`bifrost_phonon.py:ditto_instrument` in
+bifrost-workflow-2609) builds the instrument around it. Files started afterwards have
+`nexus` as `/entry/sample`, where NICOS adds the Sample device's information too. A
+sample may use fewer of the instrument's parameters, or new ones with defaults; one that
+needs a parameter no device sets is refused.
+
 ## Known limits
 
 - The services start in NICOS' master process. A session that only becomes master
@@ -85,6 +102,8 @@ instead of 1.5 MB for BIFROST.
   directory.
 - A dataset in the template cannot be changed by a start message, so nothing NICOS sets
   per run (title, users, sample) may be in the structure.
+- Each new sample simulates the primary spectrometer again once: the split keeps the
+  sample's particle variables (USERVARS) in the primary half, so its cache key changes.
 - `rays_per_charge` is a plain conversion factor; the charge preset is not yet tied to
   the source's real proton charge.
 
