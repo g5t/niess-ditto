@@ -1,4 +1,4 @@
-from nicos.core import Attach, HasLimits, Moveable, Override, Param, status
+from nicos.core import Attach, HasLimits, Moveable, Override, Param, oneof, status
 
 from .state import SimState
 
@@ -23,6 +23,12 @@ class SimMotor(HasLimits, Moveable):
             type=str,
             mandatory=True,
         ),
+        "sign": Param(
+            "The parameter's value is this times the device's: -1 where the real device "
+            "counts the other way from the simulation (a chopper's Spd_S)",
+            type=oneof(1, -1),
+            default=1,
+        ),
     }
 
     parameter_overrides = {
@@ -30,14 +36,15 @@ class SimMotor(HasLimits, Moveable):
     }
 
     def doStart(self, target):
-        self._attached_state.set_motor(self.parameter, target)
+        self._attached_state.set_motor(self.parameter, self.sign * target)
 
     def doRead(self, maxage=0):
-        return self._attached_state.get_motor(self.parameter, self.target or 0)
+        value = self._attached_state.get_motor(self.parameter, None)
+        return (self.target or 0) if value is None else self.sign * value
 
     def doStatus(self, maxage=0):
         return status.OK, "idle"
 
     def simulation_parameters(self, target):
         """The parameter values moving to ``target`` would simulate."""
-        return {self.parameter: target}
+        return {self.parameter: self.sign * target}

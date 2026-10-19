@@ -34,6 +34,9 @@ file go through the real ESS data-collection services.
   any device.
 - `SimMotor` (one per parameter), `SimChopperSpeed` (the real controller's speeds only)
   and `SimChopperController` (`start`/`stop`/`park`) stand in for the real devices.
+  A chopper speed device counts as the real `Spd_S` does, positive clockwise facing
+  away from the source, and sets the simulation's NeXus-signed speed (logged as
+  `SpdNexus-R`) to its negation.
 - `IncidentBand` sets all six discs from one lowest incident energy, or a longest
   wavelength, with `chopcal.nicos.bifrost`; it refuses while any disc is stopped.
 - `SimDetector` runs each count as one `restage` point, so primary spectrometer
@@ -126,6 +129,13 @@ our esslivedata branch, not yet upstream. The monitors need nothing: the setup's
 
 ## Known limits
 
+- Chopper speeds need a niess that logs them as `SpdNexus-R` (after 0.13.0). With an
+  older structure, the speed devices are not matched and the setup refuses to build
+  `IncidentBand`.
+- niess and chopcal turn BIFROST's pulse-shaping and frame-overlap discs anticlockwise
+  facing away from the source, so their speeds are negative as `Spd_S` counts. The real
+  setups map only non-negative speeds for those discs, so `SimChopperSpeed` refuses
+  chopcal's settings for them until it is settled which way the discs really turn.
 - The services start in NICOS' master process. A session that only becomes master
   after loading the setup (`nicos-script -M`) calls `sim_services.start()` itself.
 - The simulation runs in NICOS' working directory, so data files the sample reads by
