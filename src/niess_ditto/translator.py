@@ -11,7 +11,10 @@ its record (``.RBV``), so dropping both gives the address NICOS uses::
         sample_rotation (structure)            sample_stack_rotation (NICOS)
 
 A chopper controller has no PV of its own that a log records, but each one attaches its
-speed device, which does.
+speed device, which does. That device reads ``Spd_R`` and writes ``Spd_S``, which ESS
+counts positive clockwise facing away from the source; the file records the NeXus sign,
+anticlockwise, from ``SpdNexus-R`` (ECDC's Choppers page). So a speed device matches the
+``SpdNexus-R`` log, and sets its parameter negated.
 """
 from __future__ import annotations
 
@@ -21,11 +24,22 @@ from dataclasses import dataclass, field
 PREFIX = 'mcstas:'
 _FIELD = re.compile(r'\.[A-Z]+$')
 _PV_KEYS = ('motorpv', 'readpv', 'writepv')
+#: ESS-signed PV suffix -> the NeXus-signed record a file logs instead, of opposite sign
+_NEGATED = {':Spd_R': ':SpdNexus-R', ':Spd_S': ':SpdNexus-R'}
 
 
 def record(pv: str) -> str:
     """The EPICS record a PV names: no simulation prefix, no record field."""
     return _FIELD.sub('', pv.removeprefix(PREFIX))
+
+
+def _logged(pv: str) -> tuple[str, bool]:
+    """The record a file logs for a NICOS PV, and whether it holds the negated value."""
+    pv = record(pv)
+    for ess, nexus in _NEGATED.items():
+        if pv.endswith(ess):
+            return pv.removesuffix(ess) + nexus, True
+    return pv, False
 
 
 @dataclass
@@ -36,6 +50,8 @@ class Translation:
     devices: dict[str, tuple[str, dict]] = field(default_factory=dict)
     #: chopper controller name -> the name of the speed device it attaches
     controllers: dict[str, str] = field(default_factory=dict)
+    #: NICOS devices whose value is the negation of their parameter's
+    negated: set[str] = field(default_factory=set)
 
     def device_of(self, parameter: str) -> str | None:
         return next((d for d, p in self.parameters.items() if p == parameter), None)
@@ -57,13 +73,18 @@ def translate(structure: dict, setups: dict[str, tuple[str, dict]]) -> Translati
 
     out = Translation()
     for name, (classname, config) in setups.items():
-        pvs = {record(config[key]) for key in _PV_KEYS if isinstance(config.get(key), str)}
-        found = {by_record[pv] for pv in pvs if pv in by_record}
-        if len(found) > 1:
+        pvs = {_logged(config[key]) for key in _PV_KEYS if isinstance(config.get(key), str)}
+        found = {(by_record[pv], negated) for pv, negated in pvs if pv in by_record}
+        if len({parameter for parameter, _ in found}) > 1:
             raise ValueError(f'NICOS device {name} addresses PVs of {sorted(found)}')
+        if len(found) > 1:
+            raise ValueError(f'NICOS device {name} addresses {found.pop()[0]} with both signs')
         if found:
-            out.parameters[name] = found.pop()
+            parameter, negated = found.pop()
+            out.parameters[name] = parameter
             out.devices[name] = (classname, config)
+            if negated:
+                out.negated.add(name)
     taken = {}
     for name, parameter in out.parameters.items():
         if parameter in taken:

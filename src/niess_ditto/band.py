@@ -55,7 +55,7 @@ class IncidentBand(Moveable):
         values = bifrost(session.getDevice(self.pulse_delay_device).read(0),
                          energy_min=energy_min, wavelength_max=wavelength_max or None,
                          shaping_time=self.shaping_time,
-                         pulse_shaping_speed_max=max(speeds))
+                         pulse_shaping_speed_max=max(abs(s) for s in speeds))
         return {self.devices[key]: value for key, value in values.items()}
 
     def doStart(self, target):

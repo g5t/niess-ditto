@@ -248,8 +248,10 @@ def make_ditto_setup(
             unit=_unit(p),
             abslimits=(-1e9, 1e9),
         )
+        if nicos_name in found.negated:
+            config["sign"] = -1
         if p.value.has_value:
-            config["default"] = p.value.value
+            config["default"] = config.get("sign", 1) * p.value.value
         if p.value.data_type == DataType.int:
             config["fmtstr"] = "%d"
         if nicos_name is None:
