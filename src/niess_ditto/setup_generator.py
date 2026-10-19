@@ -61,6 +61,34 @@ def ensure_topics(broker, structure_json):
         print(f"warning: could not create the Kafka topics at {broker}: {error}")
 
 
+#: Where ESS' esslivedata devices live
+LIVEDATA = "nicos_ess.devices.datasources.livedata"
+
+
+def livedata_devices(real, broker, data_timeout):
+    """The real instrument's esslivedata collector and its channels, for DITTO.
+
+    The collector becomes `niess_ditto.livedata.SimLiveDataCollector`, counting on the
+    proton charge preset. A channel's ``data_timeout`` must outlast a point: a monitor
+    histogram arrives once, when the point has been simulated, not continuously.
+    """
+    collectors = {name: config for name, (cls, config) in real.items()
+                  if cls == f"{LIVEDATA}.LiveDataCollector"}
+    if len(collectors) != 1:
+        raise ValueError(f"expected one {LIVEDATA}.LiveDataCollector in the real setups, "
+                         f"found {sorted(collectors) or 'none'}")
+    (name, config), = collectors.items()
+    devices = {}
+    for channel in [*config.get("others", ()), *config.get("timers", ())]:
+        cls, channel_config = real[channel]
+        if cls == f"{LIVEDATA}.DataChannel":
+            channel_config = dict(channel_config, data_timeout=data_timeout)
+        devices[channel] = _device(cls, **channel_config)
+    devices[name] = _device("niess_ditto.livedata.SimLiveDataCollector",
+                            **dict(config, brokers=[broker], monitors=["charge"]))
+    return devices
+
+
 def make_ditto_setup(
     instrument_json,
     structure_json,
@@ -71,6 +99,8 @@ def make_ditto_setup(
     rays_per_charge=1.0,
     efu=(),
     sample_builder=None,
+    livedata=False,
+    livedata_timeout=3600.0,
 ):
     """Return the ``devices`` dict of a DITTO setup.
 
@@ -78,6 +108,9 @@ def make_ditto_setup(
     devices. ``names`` renames any of them: ``{"sample_stack_rotation": "a3"}``.
     ``sample_builder`` (``"file.py:function"``) builds the instrument around a niess
     sample; with it, ``sim_sample.load_sample(script)`` changes the sample.
+    ``livedata`` adds the real instrument's esslivedata collector and channels, which
+    count each point as the real instrument would (``SetDetectors(livedata_collector)``),
+    their data timeout ``livedata_timeout`` seconds.
     """
     from mccode_antlr.common.expression import DataType
     from mccode_plumber.manage.orchestrate import get_instr_name_and_parameters, load_file_json
@@ -86,7 +119,8 @@ def make_ditto_setup(
 
     names = dict(names or {})
     instr_name, parameters = get_instr_name_and_parameters(instrument_json)
-    found = translate(load_file_json(structure_json), read_setups(nicos_setups))
+    real = read_setups(nicos_setups)
+    found = translate(load_file_json(structure_json), real)
     nicos_of = {p: d for d, p in found.parameters.items()}
     speeds = set(found.controllers.values())
 
@@ -173,6 +207,12 @@ def make_ditto_setup(
         "nicos.devices.mcstas.Detector",
         description=f"{instr_name} detector", mcstas="sim_det", monitors=["charge"],
     )
+    if livedata:
+        added = livedata_devices(real, broker, livedata_timeout)
+        clash = sorted(set(added) & set(devices))
+        if clash:
+            raise ValueError(f"esslivedata devices clash with DITTO's: {', '.join(clash)}")
+        devices.update(added)
 
     from mccode_plumber.manage.orchestrate import TOPICS
     ensure_topics(broker, structure_json)

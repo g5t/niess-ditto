@@ -91,6 +91,27 @@ bifrost-workflow-2609) builds the instrument around it. Files started afterwards
 sample may use fewer of the instrument's parameters, or new ones with defaults; one that
 needs a parameter no device sets is refused.
 
+## Counting through esslivedata
+
+The real BIFROST counts with ESS' `LiveDataCollector`, whose channels show what
+esslivedata reduces from the event and monitor streams. With `livedata=True`
+(`DITTO_LIVEDATA=1` for `nicos/ditto/setups/bifrost.py`) the setup takes that collector
+and its channels from the real instrument's setups, and the collector becomes
+`niess_ditto.livedata.SimLiveDataCollector`:
+
+```python
+SetDetectors(livedata_collector)
+count(charge=100000)
+```
+
+A count resets esslivedata's accumulation, simulates the point, then waits until every
+channel has data from this count and none has changed for `settle` seconds (at most
+`catchup_timeout`). Each monitor sends one histogram per point, when the point has been
+simulated, so a channel's `data_timeout` is an hour rather than the real ten seconds.
+
+esslivedata must run against the same broker, with `--instrument bifrost` and
+`--log-source-prefix mcstas:` so that it matches the simulated PVs.
+
 ## Known limits
 
 - The services start in NICOS' master process. A session that only becomes master

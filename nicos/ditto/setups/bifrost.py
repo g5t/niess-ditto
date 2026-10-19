@@ -17,6 +17,8 @@ devices = make_ditto_setup(
     broker="localhost:9092",
     workdir=os.environ.get("DITTO_WORKDIR", "/tmp/ditto"),
     sample_builder=os.environ.get("DITTO_BUILDER", "/opt/ditto/bifrost_phonon.py:ditto_instrument"),
+    # The real instrument's esslivedata channels: SetDetectors(livedata_collector)
+    livedata=os.environ.get("DITTO_LIVEDATA", "") == "1",
 )
 
 startupcode = """
