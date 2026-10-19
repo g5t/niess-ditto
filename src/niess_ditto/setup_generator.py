@@ -24,6 +24,58 @@ def _unit(parameter):
     return (parameter.unit or "").strip('"')
 
 
+def _stamp(builder, options) -> str:
+    """Identifies what a model built by ``builder`` with ``options`` is built from: the
+    builder's source and those of niess and mccode-antlr, which may be checkouts whose
+    version does not change with them."""
+    import hashlib
+    from importlib.util import find_spec
+
+    import mccode_antlr
+    import niess
+
+    where = builder.rpartition(":")[0]
+    files = [Path(where if where.endswith(".py") else find_spec(where).origin)]
+    for package in (niess, mccode_antlr):
+        root = Path(package.__file__).parent
+        files += sorted(p for p in root.rglob("*") if p.is_file() and "__pycache__" not in p.parts)
+    digest = hashlib.sha256(json.dumps([builder, options], sort_keys=True).encode())
+    for file in files:
+        digest.update(str(file).encode())
+        digest.update(file.read_bytes())
+    return digest.hexdigest()
+
+
+def build_model(builder, workdir, **options):
+    """Build the digital model with ``builder``, or reuse the one built last time.
+
+    ``builder`` (``"file.py:function"`` or ``"module:function"``) is called with
+    ``options`` and returns the NeXus structure and the McStas instrument. Both are
+    written to ``workdir``, and their paths returned, ``(instrument_json,
+    structure_json)``. Building the instrument takes seconds and NICOS evaluates a setup
+    in every process that reads it, so a build is kept until its stamp changes (see
+    `_stamp`), and one process builds while the others wait.
+    """
+    import fcntl
+    from mccode_antlr.io.json import save_json
+
+    from .sample import builder_function
+
+    workdir = Path(workdir)
+    workdir.mkdir(parents=True, exist_ok=True)
+    instrument, structure = workdir / "model.instr.json", workdir / "model.json"
+    stamp_file, wanted = workdir / "model.stamp", _stamp(builder, options)
+    with open(workdir / "model.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if not (stamp_file.exists() and stamp_file.read_text() == wanted
+                and instrument.exists() and structure.exists()):
+            built_structure, instr = builder_function(builder)(**options)
+            structure.write_text(json.dumps(built_structure))
+            save_json(instr, instrument)
+            stamp_file.write_text(wanted)
+    return str(instrument), str(structure)
+
+
 def nexus_template(instrument_json, structure_json, path):
     """Write the start message's structure: the streams and links the run writes,
     with the parameters plumber adds. Its datasets are in the writer's template.
@@ -121,9 +173,9 @@ def livedata_devices(real, broker, data_timeout):
 
 
 def make_ditto_setup(
-    instrument_json,
-    structure_json,
-    nicos_setups,
+    instrument_json=None,
+    structure_json=None,
+    nicos_setups=(),
     names=None,
     broker="localhost:9092",
     workdir="/tmp/ditto",
@@ -133,8 +185,13 @@ def make_ditto_setup(
     livedata=False,
     livedata_timeout=3600.0,
     monitor_sources=None,
+    model_builder=None,
+    model_options=None,
 ):
     """Return the ``devices`` dict of a DITTO setup.
+
+    The digital model is ``instrument_json`` and ``structure_json``, or else what
+    ``model_builder`` builds with ``model_options`` (see `build_model`), into ``workdir``.
 
     ``nicos_setups`` are the real instrument's NICOS setup directories, read to name the
     devices. ``names`` renames any of them: ``{"sample_stack_rotation": "a3"}``.
@@ -152,6 +209,11 @@ def make_ditto_setup(
 
     from .translator import read_setups, translate
 
+    if model_builder:
+        instrument_json, structure_json = build_model(
+            model_builder, Path(workdir) / "model", **(model_options or {}))
+    if not (instrument_json and structure_json):
+        raise ValueError("give instrument_json and structure_json, or a model_builder")
     names = dict(names or {})
     instr_name, parameters = get_instr_name_and_parameters(instrument_json)
     if monitor_sources:
