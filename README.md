@@ -109,8 +109,11 @@ channel has data from this count and none has changed for `settle` seconds (at m
 `catchup_timeout`). Each monitor sends one histogram per point, when the point has been
 simulated, so a channel's `data_timeout` is an hour rather than the real ten seconds.
 
-esslivedata must run against the same broker, with `--instrument bifrost` and
-`--log-source-prefix mcstas:` so that it matches the simulated PVs.
+esslivedata must run against the same broker, with `--instrument bifrost`,
+`--log-source-prefix mcstas:` so that it matches the simulated PVs, and
+`--monitor-sources-by-name` so that it matches the monitors, which the simulation
+publishes under their NeXus group names rather than `cbm1`...`cbm5`. Both options are
+on our esslivedata branches, not yet upstream.
 
 ## Known limits
 
