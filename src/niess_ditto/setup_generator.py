@@ -44,6 +44,37 @@ def nexus_template(instrument_json, structure_json, path):
     return str(path)
 
 
+def with_monitor_sources(structure: dict, sources: dict) -> dict:
+    """A copy of ``structure`` whose monitors publish under the Kafka sources given.
+
+    ``sources`` maps an ``NXmonitor`` group's name to the source its histogram (da00)
+    stream takes, as the real instrument's structure names them: ``{"psc_monitor":
+    "cbm1"}``. The group keeps its name, so mccode-plumber still finds the histogram
+    and publishes it under the new source.
+    """
+    unused = set(sources)
+
+    def renamed(node, monitor=None):
+        if isinstance(node, list):
+            return [renamed(n, monitor) for n in node]
+        if not isinstance(node, dict):
+            return node
+        classes = [a.get("values") for a in node.get("attributes") or ()
+                   if isinstance(a, dict) and a.get("name") == "NX_class"]
+        if "NXmonitor" in classes:
+            monitor = node.get("name")
+        out = {k: renamed(v, monitor) for k, v in node.items()}
+        if out.get("module") == "da00" and monitor in sources:
+            out["config"] = dict(out["config"], source=sources[monitor])
+            unused.discard(monitor)
+        return out
+
+    out = renamed(structure)
+    if unused:
+        raise ValueError(f"no monitor stream to rename for {', '.join(sorted(unused))}")
+    return out
+
+
 def ensure_topics(broker, structure_json):
     """Create the Kafka topics the file-writer devices need before they are created.
 
@@ -61,6 +92,34 @@ def ensure_topics(broker, structure_json):
         print(f"warning: could not create the Kafka topics at {broker}: {error}")
 
 
+#: Where ESS' esslivedata devices live
+LIVEDATA = "nicos_ess.devices.datasources.livedata"
+
+
+def livedata_devices(real, broker, data_timeout):
+    """The real instrument's esslivedata collector and its channels, for DITTO.
+
+    The collector becomes `niess_ditto.livedata.SimLiveDataCollector`, counting on the
+    proton charge preset. A channel's ``data_timeout`` must outlast a point: a monitor
+    histogram arrives once, when the point has been simulated, not continuously.
+    """
+    collectors = {name: config for name, (cls, config) in real.items()
+                  if cls == f"{LIVEDATA}.LiveDataCollector"}
+    if len(collectors) != 1:
+        raise ValueError(f"expected one {LIVEDATA}.LiveDataCollector in the real setups, "
+                         f"found {sorted(collectors) or 'none'}")
+    (name, config), = collectors.items()
+    devices = {}
+    for channel in [*config.get("others", ()), *config.get("timers", ())]:
+        cls, channel_config = real[channel]
+        if cls == f"{LIVEDATA}.DataChannel":
+            channel_config = dict(channel_config, data_timeout=data_timeout)
+        devices[channel] = _device(cls, **channel_config)
+    devices[name] = _device("niess_ditto.livedata.SimLiveDataCollector",
+                            **dict(config, brokers=[broker], monitors=["charge"]))
+    return devices
+
+
 def make_ditto_setup(
     instrument_json,
     structure_json,
@@ -71,6 +130,9 @@ def make_ditto_setup(
     rays_per_charge=1.0,
     efu=(),
     sample_builder=None,
+    livedata=False,
+    livedata_timeout=3600.0,
+    monitor_sources=None,
 ):
     """Return the ``devices`` dict of a DITTO setup.
 
@@ -78,6 +140,12 @@ def make_ditto_setup(
     devices. ``names`` renames any of them: ``{"sample_stack_rotation": "a3"}``.
     ``sample_builder`` (``"file.py:function"``) builds the instrument around a niess
     sample; with it, ``sim_sample.load_sample(script)`` changes the sample.
+    ``livedata`` adds the real instrument's esslivedata collector and channels, which
+    count each point as the real instrument would (``SetDetectors(livedata_collector)``),
+    their data timeout ``livedata_timeout`` seconds.
+    ``monitor_sources`` renames the Kafka sources of the monitors, by group name, as the
+    real instrument's structure names them (see `with_monitor_sources`); everything
+    DITTO starts uses the renamed structure, written into ``workdir``.
     """
     from mccode_antlr.common.expression import DataType
     from mccode_plumber.manage.orchestrate import get_instr_name_and_parameters, load_file_json
@@ -86,7 +154,14 @@ def make_ditto_setup(
 
     names = dict(names or {})
     instr_name, parameters = get_instr_name_and_parameters(instrument_json)
-    found = translate(load_file_json(structure_json), read_setups(nicos_setups))
+    if monitor_sources:
+        path = Path(workdir) / f"{instr_name}_structure.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(
+            with_monitor_sources(load_file_json(structure_json), monitor_sources)))
+        structure_json = str(path)
+    real = read_setups(nicos_setups)
+    found = translate(load_file_json(structure_json), real)
     nicos_of = {p: d for d, p in found.parameters.items()}
     speeds = set(found.controllers.values())
 
@@ -173,6 +248,12 @@ def make_ditto_setup(
         "nicos.devices.mcstas.Detector",
         description=f"{instr_name} detector", mcstas="sim_det", monitors=["charge"],
     )
+    if livedata:
+        added = livedata_devices(real, broker, livedata_timeout)
+        clash = sorted(set(added) & set(devices))
+        if clash:
+            raise ValueError(f"esslivedata devices clash with DITTO's: {', '.join(clash)}")
+        devices.update(added)
 
     from mccode_plumber.manage.orchestrate import TOPICS
     ensure_topics(broker, structure_json)
