@@ -44,6 +44,37 @@ def nexus_template(instrument_json, structure_json, path):
     return str(path)
 
 
+def with_monitor_sources(structure: dict, sources: dict) -> dict:
+    """A copy of ``structure`` whose monitors publish under the Kafka sources given.
+
+    ``sources`` maps an ``NXmonitor`` group's name to the source its histogram (da00)
+    stream takes, as the real instrument's structure names them: ``{"psc_monitor":
+    "cbm1"}``. The group keeps its name, so mccode-plumber still finds the histogram
+    and publishes it under the new source.
+    """
+    unused = set(sources)
+
+    def renamed(node, monitor=None):
+        if isinstance(node, list):
+            return [renamed(n, monitor) for n in node]
+        if not isinstance(node, dict):
+            return node
+        classes = [a.get("values") for a in node.get("attributes") or ()
+                   if isinstance(a, dict) and a.get("name") == "NX_class"]
+        if "NXmonitor" in classes:
+            monitor = node.get("name")
+        out = {k: renamed(v, monitor) for k, v in node.items()}
+        if out.get("module") == "da00" and monitor in sources:
+            out["config"] = dict(out["config"], source=sources[monitor])
+            unused.discard(monitor)
+        return out
+
+    out = renamed(structure)
+    if unused:
+        raise ValueError(f"no monitor stream to rename for {', '.join(sorted(unused))}")
+    return out
+
+
 def ensure_topics(broker, structure_json):
     """Create the Kafka topics the file-writer devices need before they are created.
 
@@ -101,6 +132,7 @@ def make_ditto_setup(
     sample_builder=None,
     livedata=False,
     livedata_timeout=3600.0,
+    monitor_sources=None,
 ):
     """Return the ``devices`` dict of a DITTO setup.
 
@@ -111,6 +143,9 @@ def make_ditto_setup(
     ``livedata`` adds the real instrument's esslivedata collector and channels, which
     count each point as the real instrument would (``SetDetectors(livedata_collector)``),
     their data timeout ``livedata_timeout`` seconds.
+    ``monitor_sources`` renames the Kafka sources of the monitors, by group name, as the
+    real instrument's structure names them (see `with_monitor_sources`); everything
+    DITTO starts uses the renamed structure, written into ``workdir``.
     """
     from mccode_antlr.common.expression import DataType
     from mccode_plumber.manage.orchestrate import get_instr_name_and_parameters, load_file_json
@@ -119,6 +154,12 @@ def make_ditto_setup(
 
     names = dict(names or {})
     instr_name, parameters = get_instr_name_and_parameters(instrument_json)
+    if monitor_sources:
+        path = Path(workdir) / f"{instr_name}_structure.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(
+            with_monitor_sources(load_file_json(structure_json), monitor_sources)))
+        structure_json = str(path)
     real = read_setups(nicos_setups)
     found = translate(load_file_json(structure_json), real)
     nicos_of = {p: d for d, p in found.parameters.items()}

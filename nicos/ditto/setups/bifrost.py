@@ -19,6 +19,14 @@ devices = make_ditto_setup(
     sample_builder=os.environ.get("DITTO_BUILDER", "/opt/ditto/bifrost_phonon.py:ditto_instrument"),
     # The real instrument's esslivedata channels: SetDetectors(livedata_collector)
     livedata=os.environ.get("DITTO_LIVEDATA", "") == "1",
+    # The monitors publish under the beam monitor EFU's names, as in ECDC's structure
+    monitor_sources={
+        "psc_monitor": "cbm1",
+        "overlap_monitor": "cbm2",
+        "bandwidth_monitor": "cbm3",
+        "normalization_monitor": "cbm4",
+        "elastic_monitor": "cbm5",
+    },
 )
 
 startupcode = """

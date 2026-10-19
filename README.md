@@ -110,10 +110,11 @@ channel has data from this count and none has changed for `settle` seconds (at m
 simulated, so a channel's `data_timeout` is an hour rather than the real ten seconds.
 
 esslivedata must run against the same broker, with `--instrument bifrost`,
-`--log-source-prefix mcstas:` so that it matches the simulated PVs, and
-`--monitor-sources-by-name` so that it matches the monitors, which the simulation
-publishes under their NeXus group names rather than `cbm1`...`cbm5`. Both options are
-on our esslivedata branches, not yet upstream.
+and `--log-source-prefix mcstas:` so that it matches the simulated PVs; that option is on
+our esslivedata branch, not yet upstream. The monitors need nothing: the setup's
+`monitor_sources` gives each the beam monitor EFU's source (`psc_monitor` publishes as
+`cbm1`, ...), as the real instrument's structure does, and mccode-plumber (branch
+`monitor-source-from-directive`) publishes each histogram under its structure's source.
 
 ## Known limits
 
