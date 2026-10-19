@@ -52,11 +52,16 @@ See `nicos/ditto/setups/bifrost.py`:
 
 ```python
 devices = make_ditto_setup(
-    instrument_json="/opt/ditto/bifrost_live.instr.json",
-    structure_json="/opt/ditto/bifrost_live.json",
+    model_builder="/opt/ditto/bifrost_phonon.py:ditto_model",
     nicos_setups=[Path(nicos_ess.__file__).parent / "bifrost" / "setups"],
 )
 ```
+
+The setup builds the digital model when NICOS loads it: `model_builder` returns the
+NeXus structure and the McStas instrument, written to `<workdir>/model/`. Building the
+instrument takes seconds and NICOS evaluates a setup in every process that reads it, so
+the files are kept until the builder's source, its `model_options`, niess or
+mccode-antlr change. `instrument_json` and `structure_json` give a prebuilt pair instead.
 
 ```python
 start_filewriting("a3 scan")
@@ -65,7 +70,8 @@ scan(sample_stack_rotation, 0, 1, 3, charge=100000)
 stop_filewriting()
 ```
 
-The live build and structure come from `bifrost_phonon.py --live` (bifrost-workflow-2609).
+The BIFROST builder is `ditto_model` in bifrost-workflow-2609's `bifrost_phonon.py`, whose
+`--live` writes the same pair to files.
 Needs a Kafka broker, and the stacktainer splitrun image's EFU, forwarder,
 kafka-to-nexus and template-maker.
 
@@ -133,7 +139,7 @@ our esslivedata branch, not yet upstream. The monitors need nothing: the setup's
   `split-drops-unused-uservars` change and restage's `compile-a-copy`; without the first,
   the split keeps a sample's particle variables in the primary and each new sample
   simulates it again; without the second, every count after a compile does.
-- The setup's instrument (`DITTO_INSTRUMENT`) must be built by the same builder, with
+- The setup's instrument must be built by the same builder script, with
   the same niess and mccode-antlr, as `load_sample`'s: one built by other versions
   differs in its primary too (component metadata, number formatting), so it shares no
   primary with the samples.
