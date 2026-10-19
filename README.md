@@ -124,14 +124,10 @@ esslivedata must run against the same broker, with `--instrument bifrost`,
 and `--log-source-prefix mcstas:` so that it matches the simulated PVs; that option is on
 our esslivedata branch, not yet upstream. The monitors need nothing: the setup's
 `monitor_sources` gives each the beam monitor EFU's source (`psc_monitor` publishes as
-`cbm1`, ...), as the real instrument's structure does, and mccode-plumber (branch
-`monitor-source-from-directive`) publishes each histogram under its structure's source.
+`cbm1`, ...), as the real instrument's structure does, and mccode-plumber publishes each histogram under its structure's source.
 
 ## Known limits
 
-- Chopper speeds need a niess that logs them as `SpdNexus-R` (after 0.13.0). With an
-  older structure, the speed devices are not matched and the setup refuses to build
-  `IncidentBand`.
 - niess and chopcal turn BIFROST's pulse-shaping and frame-overlap discs anticlockwise
   facing away from the source, so their speeds are negative as `Spd_S` counts. The real
   setups map only non-negative speeds for those discs, so `SimChopperSpeed` refuses
