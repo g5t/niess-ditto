@@ -140,9 +140,6 @@ our esslivedata branch, not yet upstream. The monitors need nothing: the setup's
   after loading the setup (`nicos-script -M`) calls `sim_services.start()` itself.
 - The simulation runs in NICOS' working directory, so data files the sample reads by
   relative name (BIFROST's `.lau` reflection list) must be there.
-- mccode-plumber must pass `--hdf-template-prefix` to kafka-to-nexus (branch
-  `writer-template-prefix`), so that the writer finds the template in its working
-  directory.
 - A dataset in the template cannot be changed by a start message, so nothing NICOS sets
   per run (title, users, sample) may be in the structure.
 - A sample shares its primary with the others only with mccode-antlr's
