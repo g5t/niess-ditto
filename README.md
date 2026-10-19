@@ -74,7 +74,10 @@ stop_filewriting()
 ```
 
 The BIFROST builder is `ditto_model` in bifrost-workflow-2609's `bifrost_phonon.py`, whose
-`--live` writes the same pair to files.
+`--live --real-pv-names` writes the same pair to files. The setup builds it with
+`real_pv_names=True`: the simulated PVs take the real instrument's names, without niess's
+`mcstas:` prefix, which is safe because mccode-plumber keeps every EPICS server and client
+on the loopback interface.
 Needs a Kafka broker, and the stacktainer splitrun image's EFU, forwarder,
 kafka-to-nexus and template-maker.
 
@@ -120,9 +123,8 @@ channel has data from this count and none has changed for `settle` seconds (at m
 `catchup_timeout`). Each monitor sends one histogram per point, when the point has been
 simulated, so a channel's `data_timeout` is an hour rather than the real ten seconds.
 
-esslivedata must run against the same broker, with `--instrument bifrost`,
-and `--log-source-prefix mcstas:` so that it matches the simulated PVs; that option is on
-our esslivedata branch, not yet upstream. The monitors need nothing: the setup's
+esslivedata must run against the same broker, with `--instrument bifrost`. The logs need
+nothing, since the simulated PVs have the real names, and nor do the monitors: the setup's
 `monitor_sources` gives each the beam monitor EFU's source (`psc_monitor` publishes as
 `cbm1`, ...), as the real instrument's structure does, and mccode-plumber publishes each histogram under its structure's source.
 

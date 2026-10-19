@@ -19,9 +19,9 @@ devices = make_ditto_setup(
     structure_json=prebuilt[1],
     model_builder=None if all(prebuilt) else os.environ.get(
         "DITTO_MODEL", "/opt/ditto/bifrost_phonon.py:ditto_model"),
-    # real_pv_names=True drops the mcstas: prefix from the simulated PVs; EPICS is held
-    # to this machine either way
-    model_options={"real_pv_names": False},
+    # The simulated PVs take the real names, without niess's mcstas: prefix, so that
+    # esslivedata finds the logs it knows; mccode-plumber holds EPICS to this machine
+    model_options={"real_pv_names": True},
     # The real instrument's setups name the devices, matched to parameters by PV
     nicos_setups=[Path(nicos_ess.__file__).parent / "bifrost" / "setups"],
     broker="localhost:9092",
