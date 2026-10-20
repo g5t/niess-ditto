@@ -100,6 +100,8 @@ class SimSample(Readable):
         "builder": Param("Builds the instrument around a niess sample: "
                          "'file.py:function' or 'module:function'",
                          type=nonemptystring, mandatory=True),
+        "builder_options": Param("Keyword arguments for the builder, after the sample",
+                                 type=anytype, default={}),
         "base_instrument": Param("The setup's instrument, which the devices were made for",
                                  type=nonemptystring, mandatory=True),
         "workdir": Param("Where the instruments built for samples go",
@@ -134,7 +136,7 @@ class SimSample(Readable):
         nexus = nxsample(defined.get("nexus") or {"name": Path(script).stem})
 
         self.log.info("building the instrument around %s", Path(script).name)
-        instr = builder_function(self.builder)(defined["sample"])
+        instr = builder_function(self.builder)(defined["sample"], **self.builder_options)
         missing = unsettable_parameters(instr, get_mcstas_instr(self.base_instrument))
         if missing:
             raise ValueError(f"the sample needs parameters no device sets: {', '.join(missing)}")

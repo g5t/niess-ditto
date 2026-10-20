@@ -11,6 +11,12 @@ one count at a time.
 Where the instrument is split is chosen once per scan, from all of its planned points,
 with restage's own rule: scanning the sample rotation shares one primary between every
 point, scanning a slit before the sample splits earlier so that it still can.
+
+With ``replay`` the instrument is the collecting build instead: the point's detector and
+monitor rays are written to a collector file, and once it is simulated the count replays
+it to the EFUs -- the beam monitor EFU included, so the monitors arrive as events and as
+that EFU's histograms, as at the real instrument, not as McStas' histograms. The
+parameter values are already on their PVs by then, so the replay sets none of them.
 """
 from datetime import datetime
 from itertools import count as counter
@@ -37,7 +43,8 @@ class SimDetector(McStasSimulation):
     }
 
     parameters = {
-        "instrument": Param("The mccode-antlr JSON instrument (the live build)",
+        "instrument": Param("The mccode-antlr JSON instrument (the live build, or the "
+                            "collecting one with replay)",
                             type=nonemptystring, mandatory=True),
         "structure": Param("The NeXus structure the file-writer fills",
                            type=nonemptystring, mandatory=True),
@@ -67,6 +74,22 @@ class SimDetector(McStasSimulation):
                          type=nonemptystring, default="/tmp/ditto/counts"),
         "fixed": Param("Parameters set on every count but by no device, e.g. strings",
                        type=dictof(str, str), default={}),
+        "replay": Param("Replay each count's collected rays to the EFUs, rather than "
+                        "stream detector events live (needs the collecting build)",
+                        type=bool, default=False),
+        "efu_senders": Param("readout-replay's senders: the EFU for each detector type",
+                             type=str, default=""),
+        "pulses_per_point": Param("Source pulses each count's events are spread over; "
+                                  "the beam monitor EFU sums 14 into each histogram",
+                                  type=intrange(0, 10**6), settable=True, default=14),
+        "charge_rate": Param("Proton charge per second of beam, to turn the charge preset "
+                             "into a counting time (71.43 uC a pulse at 14 Hz)",
+                             type=floatrange(1e-10), settable=True, default=1000.0,
+                             unit="uC/s"),
+        "settle": Param("Seconds to wait after a replay for the EFUs' last events",
+                        type=floatrange(0), settable=True, default=2.0, unit="s"),
+        "replay_seed": Param("Seed for the replay's sampling (0: non-deterministic)",
+                             type=intrange(0, 2**31 - 1), default=0),
     }
 
     parameter_overrides = {
@@ -186,7 +209,8 @@ class SimDetector(McStasSimulation):
             split = self._split(values)
             self._start_time = monotonic()
             pre, pre_args = self._pre
-            post, post_args = self._post
+            # collected monitors reach Kafka through the beam monitor EFU, not as histograms
+            post, post_args = (None, None) if self.replay else self._post
             splitrun(
                 self._instr, parse_scan_parameters(self._mcstas_params), {},
                 split_at=split,
@@ -200,10 +224,39 @@ class SimDetector(McStasSimulation):
                 callback=post, callback_arguments=post_args,
                 pre_callback=pre, pre_callback_arguments=pre_args,
             )
+            if self.replay:
+                self._replay(out_dir)
         except Exception:
             self.log.exception("simulation failed")
         finally:
             self._started = False
+
+
+    def _counting_time(self):
+        """The charge preset as the seconds of beam it takes, which the replay draws
+        Poisson(weight x seconds) events for."""
+        return self.preselection / self.charge_rate
+
+    def _replay(self, out_dir):
+        """Send the point's collector files to the EFUs, paced over the count's pulses."""
+        import mcstas_readout as ro
+        from mccode_plumber.manage.replay import PointPublisher, replay_file
+
+        files = sorted(Path(out_dir).glob("*.h5"))
+        if not files:
+            self.log.warning("no collector file in %s: is the instrument the collecting "
+                             "build?", out_dir)
+            return
+        paced = {"pulses_per_point": self.pulses_per_point} if self.pulses_per_point else {}
+        config = ro.ReplayConfig(
+            counting_time=self._counting_time(), seed=self.replay_seed,
+            senders_json=Path(self.efu_senders).read_text() if self.efu_senders else None,
+            fold_tof=True, **paced)
+        # the values went to their PVs before the point was simulated
+        publisher = PointPublisher(lambda pars: None)
+        for path in files:
+            self.log.info("replaying %s", path)
+            replay_file(str(path), config, publisher, settle=self.settle)
 
 
 class ChargeChannel(ActiveChannel, Waitable):

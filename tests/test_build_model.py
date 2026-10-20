@@ -33,3 +33,37 @@ def test_a_model_is_built_once_and_rebuilt_when_its_options_change(tmp_path):
     builder.write_text(BUILDER + "\n# changed\n")
     build_model(f"{builder}:model", work, name="u")
     assert calls.read_text() == "3"
+
+
+REPLAY = '''
+import json
+from pathlib import Path
+
+def efus(directory):
+    senders = Path(directory) / "senders.json"
+    senders.write_text(json.dumps({"senders": []}))
+    return {"efu": ["name:cbm,binary:/bin/cbm,config:c,calibration:c,topic:t,port:9001"],
+            "senders": str(senders)}
+
+def wrong(directory):
+    return {"efus": []}
+'''
+
+
+def test_the_replay_builder_writes_into_its_directory_and_names_the_efus(tmp_path):
+    from niess_ditto.setup_generator import build_replay
+    builder = tmp_path / "replay.py"
+    builder.write_text(REPLAY)
+    made = build_replay(f"{builder}:efus", tmp_path / "efus")
+    assert made["efu"][0].startswith("name:cbm,")
+    assert json.loads(open(made["senders"]).read()) == {"senders": []}
+    assert made["senders"] == str(tmp_path / "efus" / "senders.json")
+
+
+def test_a_replay_builder_returning_something_else_is_refused(tmp_path):
+    import pytest
+    from niess_ditto.setup_generator import build_replay
+    builder = tmp_path / "replay.py"
+    builder.write_text(REPLAY)
+    with pytest.raises(ValueError, match="not 'efu' and 'senders'"):
+        build_replay(f"{builder}:wrong", tmp_path / "efus")
