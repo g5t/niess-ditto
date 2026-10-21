@@ -76,6 +76,27 @@ def build_model(builder, workdir, **options):
     return str(instrument), str(structure)
 
 
+def build_replay(builder, workdir):
+    """What a collecting model replays into: ``builder`` called with ``workdir``.
+
+    It writes the EFUs' configuration and readout-replay's senders there and returns
+    ``{"efu": [...], "senders": path}``. NICOS evaluates a setup in every process that
+    reads it, so one process writes at a time and the others take what it wrote.
+    """
+    import fcntl
+
+    from .sample import builder_function
+
+    workdir = Path(workdir)
+    workdir.mkdir(parents=True, exist_ok=True)
+    with open(workdir / "replay.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        made = builder_function(builder)(workdir)
+    if set(made) != {"efu", "senders"}:
+        raise ValueError(f"{builder} returned {sorted(made)}, not 'efu' and 'senders'")
+    return made
+
+
 def nexus_template(instrument_json, structure_json, path):
     """Write the start message's structure: the streams and links the run writes,
     with the parameters plumber adds. Its datasets are in the writer's template.
@@ -187,6 +208,8 @@ def make_ditto_setup(
     monitor_sources=None,
     model_builder=None,
     model_options=None,
+    sample_builder_options=None,
+    replay_efus=None,
 ):
     """Return the ``devices`` dict of a DITTO setup.
 
@@ -203,6 +226,12 @@ def make_ditto_setup(
     ``monitor_sources`` renames the Kafka sources of the monitors, by group name, as the
     real instrument's structure names them (see `with_monitor_sources`); everything
     DITTO starts uses the renamed structure, written into ``workdir``.
+    ``sample_builder_options`` are passed to ``sample_builder`` after the sample.
+    ``replay_efus`` (``"file.py:function"``) makes each count replay collected rays to
+    the EFUs rather than stream them live, so the model must be the collecting build: it
+    is called with a directory, writes what the EFUs and the replay read into it, and
+    returns ``{"efu": [...], "senders": path}`` -- EFUs as ``mp-nexus-services --efu``
+    takes them, added to ``efu``, and readout-replay's senders (see `build_replay`).
     """
     from mccode_antlr.common.expression import DataType
     from mccode_plumber.manage.orchestrate import get_instr_name_and_parameters, load_file_json
@@ -214,6 +243,9 @@ def make_ditto_setup(
             model_builder, Path(workdir) / "model", **(model_options or {}))
     if not (instrument_json and structure_json):
         raise ValueError("give instrument_json and structure_json, or a model_builder")
+    replay = build_replay(replay_efus, Path(workdir) / "efus") if replay_efus else None
+    if replay:
+        efu = list(efu) + list(replay["efu"])
     names = dict(names or {})
     instr_name, parameters = get_instr_name_and_parameters(instrument_json)
     if monitor_sources:
@@ -293,8 +325,8 @@ def make_ditto_setup(
         devices["sim_sample"] = _device(
             "niess_ditto.sample.SimSample",
             description=f"{instr_name} simulated sample",
-            builder=sample_builder, base_instrument=instrument_json,
-            workdir=f"{workdir}/samples",
+            builder=sample_builder, builder_options=dict(sample_builder_options or {}),
+            base_instrument=instrument_json, workdir=f"{workdir}/samples",
         )
         sample = {"sample": "sim_sample"}
     devices["sim_det"] = _device(
@@ -303,6 +335,7 @@ def make_ditto_setup(
         instrument=instrument_json, structure=structure_json, broker=broker,
         state="sim_state", rays_per_charge=float(rays_per_charge),
         workdir=f"{workdir}/counts", fixed=fixed, **sample,
+        **({"replay": True, "efu_senders": replay["senders"]} if replay else {}),
     )
     devices["charge"] = _device(
         "niess_ditto.detector.ChargeChannel",

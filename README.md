@@ -10,6 +10,9 @@
 - [Installation](#installation)
 - [What it provides](#what-it-provides)
 - [Usage in a NICOS setup](#usage-in-a-nicos-setup)
+- [Changing the sample](#changing-the-sample)
+- [Counting through the EFUs](#counting-through-the-efus)
+- [Counting through esslivedata](#counting-through-esslivedata)
 - [Known limits](#known-limits)
 - [License](#license)
 
@@ -104,6 +107,31 @@ bifrost-workflow-2609) builds the instrument around it. Files started afterwards
 (the logged `sample_rotation`, SQW's psi) can be read from the file; without a loaded
 script the group holds only that link. A sample may use fewer of the instrument's parameters, or new ones with defaults; one that
 needs a parameter no device sets is refused.
+
+## Counting through the EFUs
+
+By default a count simulates the primary into McStas monitor histograms, which
+mccode-plumber publishes as they are, and only the secondary's detector events go
+through the detector EFU. With `DITTO_COLLECT=1` for `nicos/ditto/setups/bifrost.py`, the
+monitors go through the beam monitor EFU as well, as the real ones do:
+
+- the model and every sample are built with `collect=True`, so each count collects its
+  detector and monitor rays to files instead of sending them live;
+- `sim_services` starts the detector and beam monitor EFUs that `DITTO_EFUS`
+  (`bifrost_phonon.py:ditto_efus` by default) describes;
+- after the count is simulated, `SimDetector` (`replay=True`) replays its files to those
+  EFUs in order, over `pulses_per_point` source pulses (at least 14, which the beam
+  monitor EFU needs to send its histograms).
+
+```console
+DITTO_COLLECT=1 nicos-script -M system,bifrost scan.py
+```
+
+The monitors then publish under the beam monitor EFU's own source names (`cbm1` to
+`cbm5`), so the setup leaves out `monitor_sources`. Replay times the events with the
+count's `charge` divided by `charge_rate` (µC/s), and `replay_seed` fixes the sampling.
+`DITTO_SCRIPT` names another `bifrost_phonon.py` for the model, sample and EFU builders
+at once.
 
 ## Counting through esslivedata
 
