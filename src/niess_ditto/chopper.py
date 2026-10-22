@@ -11,7 +11,13 @@ from .motor import SimMotor
 
 
 class SimChopperSpeed(SimMotor):
-    """A disc speed, limited to the speeds the real controller maps."""
+    """A disc speed, limited to the magnitudes the real controller maps.
+
+    Either sign is allowed: the chopper group's convention signs ``Spd_S`` by the
+    direction of rotation, and BIFROST's pulse-shaping and frame-overlap discs turn
+    NeXus-positive, so they need negative speeds. The real setups don't follow that
+    convention yet and map only non-negative ones.
+    """
 
     parameters = {
         "speeds": Param("The speeds the controller accepts, in Hz", type=listof(float),
@@ -19,8 +25,8 @@ class SimChopperSpeed(SimMotor):
     }
 
     def doIsAllowed(self, target):
-        if target not in self.speeds:
-            return False, f"{target} Hz is not one of {sorted(self.speeds)}"
+        if abs(target) not in {abs(s) for s in self.speeds}:
+            return False, f"{target} Hz is not one of ±{sorted(self.speeds)}"
         return True, ""
 
 

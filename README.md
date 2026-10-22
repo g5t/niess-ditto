@@ -158,10 +158,11 @@ nothing, since the simulated PVs have the real names, and nor do the monitors: t
 
 ## Known limits
 
-- niess and chopcal turn BIFROST's pulse-shaping and frame-overlap discs anticlockwise
-  facing away from the source, so their speeds are negative as `Spd_S` counts. The real
-  setups map only non-negative speeds for those discs, so `SimChopperSpeed` refuses
-  chopcal's settings for them until it is settled which way the discs really turn.
+- BIFROST's pulse-shaping and frame-overlap discs turn anticlockwise facing away from
+  the source (NeXus-positive), so chopcal sets them to negative `Spd_S` speeds, as the
+  chopper group's convention has it. The real setups don't follow that convention yet
+  and map only non-negative speeds, so `SimChopperSpeed` accepts either sign of a
+  mapped speed, which the real instrument's NICOS does not.
 - The services start in NICOS' master process. A session that only becomes master
   after loading the setup (`nicos-script -M`) calls `sim_services.start()` itself.
 - The simulation runs in NICOS' working directory, so data files the sample reads by
