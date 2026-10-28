@@ -124,18 +124,23 @@ class SimSample(Readable):
         return Path(self.script).name if self.script else "setup sample"
 
     @usermethod
-    def load_sample(self, script):
-        """Simulate the sample ``script`` defines, and describe it in the next files."""
+    def load_sample(self, script, **values):
+        """Simulate the sample ``script`` defines, and describe it in the next files.
+
+        ``values`` are names the script sees as already defined, so one script serves
+        every remount: ``load_sample("powder.py", offset=(0, 0.002, 0))`` for a sample
+        mounted 2 mm higher, if the script reads ``offset``."""
         from mccode_antlr.io.json import save_json
         from mccode_plumber.mccode import get_mcstas_instr
 
         script = str(Path(script).resolve())
-        defined = runpy.run_path(script, run_name="niess_ditto_sample")
+        defined = runpy.run_path(script, init_globals=values, run_name="niess_ditto_sample")
         if "sample" not in defined:
             raise ValueError(f"{script} defines no 'sample'")
         nexus = nxsample(defined.get("nexus") or {"name": Path(script).stem})
 
-        self.log.info("building the instrument around %s", Path(script).name)
+        self.log.info("building the instrument around %s%s", Path(script).name,
+                      f" with {values}" if values else "")
         instr = builder_function(self.builder)(defined["sample"], **self.builder_options)
         missing = unsettable_parameters(instr, get_mcstas_instr(self.base_instrument))
         if missing:

@@ -92,7 +92,10 @@ instead of 1.5 MB for BIFROST.
 ## Changing the sample
 
 A sample script defines a niess section, `sample`, and the file's NXsample group,
-`nexus` (see `examples/vanadium.py`):
+`nexus`. niess's `niess.bifrost.samples` (after 0.15.2) builds the section from McStas' sample components
+-- vanadium, powders, tunnelling, spin waves, S(Q,w) tables -- with their focusing on the
+analyzers and the elastic monitor done for you, and gives McStas and `nexus` the same
+shape (see `examples/`: `vanadium.py`, `alumina.py`, `picoline.py`):
 
 ```python
 sim_sample.load_sample("examples/vanadium.py")   # ~7 s: the instrument is rebuilt
@@ -107,6 +110,20 @@ bifrost-workflow-2609) builds the instrument around it. Files started afterwards
 (the logged `sample_rotation`, SQW's psi) can be read from the file; without a loaded
 script the group holds only that link. A sample may use fewer of the instrument's parameters, or new ones with defaults; one that
 needs a parameter no device sets is refused.
+
+`load_sample` passes keyword arguments to the script as names it already has, so one
+script serves every remount. The sample stack can't translate, so a sample is moved the way
+it is at the instrument, by remounting it: `examples/small_powder.py` reads `offset`, and
+`sample(..., offset=...)` mounts it there:
+
+```python
+sim_sample.load_sample("examples/small_powder.py", offset=(0, 0.002, 0))   # 2 mm up
+```
+
+A data file McStas ships is named bare (`powder("Al2O3_sapphire.laz", ...)`). One of
+your own goes beside the script as a path, `Path(__file__).parent / "mine.laz"`, which
+niess writes absolutely, so it does not matter that the simulation runs in NICOS'
+working directory.
 
 ## Counting through the EFUs
 
@@ -165,8 +182,10 @@ nothing, since the simulated PVs have the real names, and nor do the monitors: t
   mapped speed, which the real instrument's NICOS does not.
 - The services start in NICOS' master process. A session that only becomes master
   after loading the setup (`nicos-script -M`) calls `sim_services.start()` itself.
-- The simulation runs in NICOS' working directory, so data files the sample reads by
-  relative name (BIFROST's `.lau` reflection list) must be there.
+- The simulation runs in NICOS' working directory, so a sample's data files must be
+  named absolutely (see [Changing the sample](#changing-the-sample)); the setup's own lead
+  crystal is, from bifrost-workflow-2609's `sample-data-paths`, as long as its `.lau` is
+  installed beside `bifrost_phonon.py`.
 - A dataset in the template cannot be changed by a start message, so nothing NICOS sets
   per run (title, users, sample) may be in the structure.
 - A sample shares its primary with the others only with mccode-antlr's
