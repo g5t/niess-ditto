@@ -111,6 +111,15 @@ bifrost-workflow-2609) builds the instrument around it. Files started afterwards
 script the group holds only that link. A sample may use fewer of the instrument's parameters, or new ones with defaults; one that
 needs a parameter no device sets is refused.
 
+`load_sample` passes keyword arguments to the script as names it already has, so one
+script serves every remount. The sample stack can't translate, so a sample is moved the way
+it is at the instrument, by remounting it: `examples/small_powder.py` reads `offset`, and
+`sample(..., offset=...)` mounts it there:
+
+```python
+sim_sample.load_sample("examples/small_powder.py", offset=(0, 0.002, 0))   # 2 mm up
+```
+
 A data file McStas ships is named bare (`powder("Al2O3_sapphire.laz", ...)`). One of
 your own goes beside the script as a path, `Path(__file__).parent / "mine.laz"`, which
 niess writes absolutely, so it does not matter that the simulation runs in NICOS'
