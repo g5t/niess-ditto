@@ -30,8 +30,8 @@ dependencies = [
   "mccode-antlr>=0.35.0",
   # 0.26.2 keeps EPICS on loopback and publishes monitors under their structure's sources
   "mccode-plumber>=0.26.2",
-  # 0.14.0 times choppers to the opening centre and logs NeXus-signed SpdNexus-R speeds
-  "niess>=0.14.0",
+  # 0.16.0 builds the example samples (niess.bifrost.samples) and remounts them
+  "niess>=0.16.0",
   # 0.18.1 compiles a copy, so a later count still finds its cached primary
   "restage>=0.18.1",
   # 0.9.0 gives NICOS ESS-signed speeds and centre-of-opening delays
