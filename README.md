@@ -92,7 +92,7 @@ instead of 1.5 MB for BIFROST.
 ## Changing the sample
 
 A sample script defines a niess section, `sample`, and the file's NXsample group,
-`nexus`. niess's `niess.bifrost.samples` (after 0.15.2) builds the section from McStas' sample components
+`nexus`. niess's `niess.bifrost.samples` (0.16.0) builds the section from McStas' sample components
 -- vanadium, powders, tunnelling, spin waves, S(Q,w) tables -- with their focusing on the
 analyzers and the elastic monitor done for you, and gives McStas and `nexus` the same
 shape (see `examples/`: `vanadium.py`, `alumina.py`, `picoline.py`):
