@@ -147,6 +147,9 @@ DITTO_COLLECT=1 nicos-script -M system,bifrost scan.py
 The monitors then publish under the beam monitor EFU's own source names (`cbm1` to
 `cbm5`), so the setup leaves out `monitor_sources`. Replay times the events with the
 count's `charge` divided by `charge_rate` (µC/s), and `replay_seed` fixes the sampling.
+`merge_ibm` (on by default; mcstas-readout-master 0.9.0 or later) sends an integrating
+monitor's ray drawn n times as one readout of n counts, which the EFU histograms the same,
+so the replay is far faster; switch it off only to replay with an older readout-master.
 `DITTO_SCRIPT` names another `bifrost_phonon.py` for the model, sample and EFU builders
 at once.
 

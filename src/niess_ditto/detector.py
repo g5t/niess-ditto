@@ -90,6 +90,10 @@ class SimDetector(McStasSimulation):
                         type=floatrange(0), settable=True, default=2.0, unit="s"),
         "replay_seed": Param("Seed for the replay's sampling (0: non-deterministic)",
                              type=intrange(0, 2**31 - 1), default=0),
+        "merge_ibm": Param("Send an integrating (IBM) monitor's ray drawn n times as one "
+                           "readout of n counts, which the beam monitor EFU histograms "
+                           "the same, rather than as n readouts (mcstas-readout-master "
+                           ">= 0.9.0)", type=bool, settable=True, default=True),
     }
 
     parameter_overrides = {
@@ -248,6 +252,8 @@ class SimDetector(McStasSimulation):
                              "build?", out_dir)
             return
         paced = {"pulses_per_point": self.pulses_per_point} if self.pulses_per_point else {}
+        if self.merge_ibm:
+            paced["merge_ibm"] = True
         config = ro.ReplayConfig(
             counting_time=self._counting_time(), seed=self.replay_seed,
             senders_json=Path(self.efu_senders).read_text() if self.efu_senders else None,
